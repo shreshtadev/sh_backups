@@ -24,12 +24,6 @@ jobs:
       - name: Build Windows
         run: GOOS=windows GOARCH=amd64 go build -v -o shbackups-windows.exe ./...
 
-      - name: Build Linux
-        run: go build -v -o shbackups-linux ./...
-
-      - name: Build Windows
-        run: GOOS=windows GOARCH=amd64 go build -v -o shbackups-windows.exe ./...
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
