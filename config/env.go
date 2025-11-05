@@ -10,8 +10,9 @@ import (
 )
 
 type AppConfig struct {
-	APIKey     string
-	APIBaseUrl string
+	APIKey          string
+	APIBaseUrl      string
+	LocalFolderPath string
 }
 
 func Load() AppConfig {
@@ -29,8 +30,9 @@ func Load() AppConfig {
 	_ = godotenv.Load(licPath)
 
 	return AppConfig{
-		APIKey:     must("API_KEY"),
-		APIBaseUrl: must("API_BASE_URL"),
+		APIKey:          must("API_KEY"),
+		APIBaseUrl:      must("API_BASE_URL"),
+		LocalFolderPath: must("LOCAL_FOLDER_PATH"),
 	}
 }
 

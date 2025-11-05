@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,47 +11,12 @@ import (
 	"shreshtasmg.in/sh_backups/config"
 	"shreshtasmg.in/sh_backups/logger"
 	"shreshtasmg.in/sh_backups/models"
-	"shreshtasmg.in/sh_backups/s3"
 	"shreshtasmg.in/sh_backups/utils"
 )
 
-func handleRegisterCompany(apiClient *api.APIClient) {
-	reader := bufio.NewReader(os.Stdin)
-	var company models.RegisterCompany
-
-	fmt.Print("Enter Company Name: ")
-	company.CompanyName, _ = reader.ReadString('\n')
-	company.CompanyName = strings.TrimSpace(company.CompanyName)
-
-	fmt.Print("Enter Local Folder Path: ")
-	company.LocalFolder, _ = reader.ReadString('\n')
-	company.LocalFolder = strings.TrimSpace(company.LocalFolder)
-
-	logger.Info(fmt.Sprintf("Registering company: %+v", company))
-
-	registeredCompany, err := apiClient.RegisterCompany(company)
-	if err != nil {
-		logger.Error("Failed to register company", err)
-		return
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		logger.Error("Cannot find home dir", err)
-	}
-	licPath := filepath.Join(homeDir, "apikey.lic")
-	file, err := os.Create(licPath)
-	if err != nil {
-		logger.Error("Failed to create apikey.lic file", err)
-		return
-	}
-	defer file.Close()
-	_, err = fmt.Fprintf(file, "API_KEY=%s\nAPI_BASE_URL=%s", registeredCompany.CompanyApiKey, registeredCompany.BaseURL)
-	if err != nil {
-		logger.Error("Failed to write API Key to apikey.lic", err)
-		return
-	}
-	logger.Info("Company registered successfully!")
-}
+const (
+	locTag = "TallyBackups"
+)
 
 func main() {
 	// Step 1: Load config
@@ -75,71 +38,47 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Step 4: Delete .zip file from S3 matching pattern
-	s3Client, err := s3.New(company.Region, company.AccessKey, company.SecretKey, company.BucketName)
-	if err != nil {
-		logger.Error("Failed to initialize S3 client", err)
-		os.Exit(1)
-	}
-
 	currentTime := func() string {
 		return time.Now().Format(time.RFC3339)
 	}
 
 	// Check for --register flag
 	for _, arg := range os.Args {
-		if arg == "--register" || arg == "-R" {
-			logger.Info(fmt.Sprintf("Registration Operation Started at %s...", currentTime()))
-			handleRegisterCompany(apiClient)
-			logger.Info(fmt.Sprintf("Registration Operation Completed at %s...", currentTime()))
-			os.Exit(0)
-		}
-
 		if arg == "--upload" || arg == "-U" || arg == "" {
 			logger.Info(fmt.Sprintf("Uploading Operation Started at %s...", currentTime()))
-			handleFileUpload(apiClient, s3Client, company)
+			handleFileUpload(apiClient, company, cfg.LocalFolderPath)
 			logger.Info(fmt.Sprintf("Uploading Operation Completed at %s...", currentTime()))
 			os.Exit(0)
 		}
 
 		if arg == "--delete" || arg == "-D" {
 			logger.Info(fmt.Sprintf("Deletion Operation Started %s...", currentTime()))
-			handleFileDelete(apiClient, s3Client, company, true)
+			handleFileDelete(apiClient, company, true)
 			logger.Info(fmt.Sprintf("Deletion Operation Completed at %s...", currentTime()))
 			os.Exit(0)
 		}
 
 		if arg == "--force-delete" || arg == "-FD" {
 			logger.Info(fmt.Sprintf("Force Deletion Operation Started at %s...", currentTime()))
-			handleFileDelete(apiClient, s3Client, company, false)
+			handleFileDelete(apiClient, company, false)
 			logger.Info(fmt.Sprintf("Force Deletion Operation Completed at %s...", currentTime()))
 			os.Exit(0)
 		}
 	}
 }
 
-func handleFileUpload(apiClient *api.APIClient, s3Client *s3.S3Client, company *models.Company) error {
+func handleFileUpload(apiClient *api.APIClient, company *models.Company, localFolder string) error {
 	// Assume pattern is "Tally" and extension is ".zip"
 
-	localZipPath, fileSize, err := utils.FindZipFileWithPatternAndLatestDate(company.LocalFolder)
+	localZipPath, fileSize, err := utils.FindZipFileWithPatternAndLatestDate(localFolder)
 	if err != nil || fileSize == 0 {
 		logger.Error("Failed to find latest Tally file or filesize is 0", err)
 		return nil
 	}
 
 	uploadKey := filepath.Base(localZipPath)
-	companyFolder := utils.Slugify(company.CompanyName)
-	// Check if file with the same name exists in S3
-	fileToCheckIfExists := strings.Join([]string{companyFolder, uploadKey}, "/")
-	_, metaerr := s3Client.GetFileMetadata(&fileToCheckIfExists)
-	if metaerr != nil {
-		logger.Info(fmt.Sprintf("Unable to find file with name %s", uploadKey))
-	} else {
-		logger.Info(fmt.Sprintf("Found file find file with name %s", uploadKey))
-		return nil
-	}
 	// Step 5: Upload .zip file from local folder
-	err = s3Client.UploadFile(uploadKey, localZipPath, company.CompanyName)
+	err = apiClient.UploadFile(company.CompanyApiKey, localZipPath)
 	if err != nil {
 		logger.Error("Failed to upload file to S3", err)
 		return err
@@ -181,18 +120,10 @@ func handleFileUpload(apiClient *api.APIClient, s3Client *s3.S3Client, company *
 	return nil
 }
 
-func handleFileDelete(apiClient *api.APIClient, s3Client *s3.S3Client, company *models.Company, applyCondition bool) {
+func handleFileDelete(apiClient *api.APIClient, company *models.Company, applyCondition bool) {
 	companyFolder := company.CompanyName
-	contentSize, sErr := s3Client.GetTotalContentLength(companyFolder)
-	if sErr != nil {
-		logger.Error("Error finding any files", sErr)
-		return
-	}
-	if contentSize == 0 {
-		logger.Info("Cannot find any files")
-		return
-	}
-
+	folderInfo, _ := apiClient.GetFolderSize(company.CompanyApiKey, locTag)
+	contentSize := folderInfo.TotalSize
 	var appliedCondition bool
 	if applyCondition {
 		appliedCondition = contentSize >= *company.TotalUsageQuota
@@ -201,7 +132,7 @@ func handleFileDelete(apiClient *api.APIClient, s3Client *s3.S3Client, company *
 	}
 
 	if appliedCondition {
-		dErr := s3Client.DeleteAllZipFilesWithPattern("Tally", companyFolder)
+		dErr := apiClient.DeleteFiles(company.CompanyApiKey, locTag)
 		if dErr != nil {
 			logger.Error("Cannot delete files", dErr)
 			return
@@ -211,7 +142,7 @@ func handleFileDelete(apiClient *api.APIClient, s3Client *s3.S3Client, company *
 			CreatedAt:   time.Now().Format(time.RFC3339),
 			FileName:    companyFolder,
 			FileSize:    &contentSize,
-			FileKey:     companyFolder + "/",
+			FileKey:     companyFolder + "/" + locTag + "/",
 			CompanyId:   company.Id,
 			FileTxnType: utils.PtrInt16(2), // 2 = delete
 			FileTxnMeta: "Deleted files in S3",
@@ -221,7 +152,7 @@ func handleFileDelete(apiClient *api.APIClient, s3Client *s3.S3Client, company *
 		}
 
 		updateQuota := &models.UpdateUsageQuota{
-			UsedQuota:   contentSize,
+			UsedQuota:   int64(0),
 			FileTxnType: 2, // 2 = delete
 		}
 		qErr := apiClient.UpdateCompanyQuota(updateQuota)

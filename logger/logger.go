@@ -44,3 +44,7 @@ func Info(msg string) {
 func Error(msg string, err error) {
 	errorLogger.Printf("[ERROR] %s: %v\n", msg, err)
 }
+
+func ErrorFn(msg string) {
+	errorLogger.Printf("[ERROR] %s\n", msg)
+}
