@@ -2,17 +2,12 @@ name: SHBackups
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags:
+      - "v*"   # trigger only on version tags like v1.0.0
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux, windows]
-        goarch: [amd64]
     steps:
       - uses: actions/checkout@v4
 
@@ -21,11 +16,39 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Build
-        run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o shbackups-${{ matrix.goos }}-${{ matrix.goarch }} ./...
-        
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Build Linux
+        run: go build -v -o shbackups-linux ./...
+
+      - name: Build Windows
+        run: GOOS=windows GOARCH=amd64 go build -v -o shbackups-windows.exe ./...
+
+      - name: Generate SHA256 checksums
+        run: |
+          sha256sum shbackups-linux > checksums.txt
+          sha256sum shbackups-windows.exe >> checksums.txt
+
+      - name: Sign checksums with GPG
+        run: gpg --batch --yes --armor --detach-sign checksums.txt
+        env:
+          # Import your private key from GitHub Secrets
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        shell: bash
+      # Import key before signing
+      - name: Import GPG key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo "passphrase=$PASSPHRASE" >> ~/.gnupg/gpg-agent.conf
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
         with:
-          name: shbackups-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: shbackups-${{ matrix.goos }}-${{ matrix.goarch }}*
+          files: |
+            shbackups-linux
+            shbackups-windows.exe
+            checksums.txt
+            checksums.txt.asc
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
