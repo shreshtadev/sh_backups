@@ -1,0 +1,29 @@
+[
+  {
+    "label": "Upload",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "debug",
+    "program": ".",
+    "args": ["-U"],
+    "cwd": "${ZED_WORKTREE_ROOT}"
+  },
+  {
+    "label": "Delete",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "debug",
+    "program": ".",
+    "args": ["-D"],
+    "cwd": "${ZED_WORKTREE_ROOT}"
+  },
+  {
+    "label": "Force Delete",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "debug",
+    "program": ".",
+    "args": ["-FD"],
+    "cwd": "${ZED_WORKTREE_ROOT}"
+  }
+]
