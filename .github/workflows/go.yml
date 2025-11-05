@@ -1,0 +1,31 @@
+name: SHBackups
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows]
+        goarch: [amd64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build
+        run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -o shbackups-${{ matrix.goos }}-${{ matrix.goarch }} ./...
+        
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shbackups-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: shbackups-${{ matrix.goos }}-${{ matrix.goarch }}*
