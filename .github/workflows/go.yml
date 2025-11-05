@@ -2,8 +2,9 @@ name: SHBackups
 
 on:
   push:
-    tags:
-      - "v*"   # trigger only on version tags like v1.0.0
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
   build:
@@ -14,7 +15,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Build Linux
         run: go build -v -o shbackups-linux ./...
@@ -22,33 +24,16 @@ jobs:
       - name: Build Windows
         run: GOOS=windows GOARCH=amd64 go build -v -o shbackups-windows.exe ./...
 
-      - name: Generate SHA256 checksums
-        run: |
-          sha256sum shbackups-linux > checksums.txt
-          sha256sum shbackups-windows.exe >> checksums.txt
+      - name: Build Linux
+        run: go build -v -o shbackups-linux ./...
 
-      - name: Sign checksums with GPG
-        run: gpg --batch --yes --armor --detach-sign checksums.txt
-        env:
-          # Import your private key from GitHub Secrets
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        shell: bash
-      # Import key before signing
-      - name: Import GPG key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-          echo "passphrase=$PASSPHRASE" >> ~/.gnupg/gpg-agent.conf
+      - name: Build Windows
+        run: GOOS=windows GOARCH=amd64 go build -v -o shbackups-windows.exe ./...
 
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: shbackups-binaries
+          path: |
             shbackups-linux
             shbackups-windows.exe
-            checksums.txt
-            checksums.txt.asc
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
