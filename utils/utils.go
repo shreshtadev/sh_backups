@@ -16,6 +16,10 @@ func PtrInt64(v int64) *int64 {
 	return &v
 }
 
+func PtrString(v string) *string {
+	return &v
+}
+
 var nonAlphanumeric = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
 func Slugify(input string) string {

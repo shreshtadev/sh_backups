@@ -8,9 +8,7 @@ This is a command-line utility for backing up local files to an AWS S3 bucket. I
 
 The application has two main modes of operation:
 
-1.  **Registration (`--register`)**: This mode is used to set up a new company. It interactively prompts the user for their company name, the local folder path to monitor, and their AWS S3 credentials. Upon successful registration with the backend API, it saves a unique `apikey.lic` file in the current directory. This key is used for all subsequent operations.
-
-2.  **Backup (Default)**: This is the primary mode. It performs the following steps:
+1.  **Backup (Default)**: This is the primary mode. It performs the following steps:
     - Loads configuration, including the API key from the environment.
     - Fetches company details and usage quota from the API.
     - Finds the most recent `.zip` file containing the name "Tally" in the configured local folder.
@@ -25,6 +23,7 @@ Before running the application, you need to configure the following environment 
 
 - `API_KEY`: The API key for authenticating with the backend service. For the initial registration, you can use a temporary key if required by the API, but for backup operations, you must use the key generated and saved in the `apikey.lic` file.
 - `API_BASE_URL`: The base URL of the backend API service (e.g., `http://localhost:8080`).
+- `LOCAL_FOLDER_PATH`: The path to the local folder containing the files to be backed up.
 
 ## How to Build
 
@@ -36,18 +35,6 @@ go build -o sh-backups .
 
 This will create an executable file named `sh-backups` in the current directory.
 
-## How to Run
-
-### First-Time Registration
-
-To register a new company, run the executable with the `--register` flag:
-
-```sh
-./sh-backups --register
-```
-
-You will be prompted to enter the company name, local folder path for backups, and your AWS S3 details. A `apikey.lic` file will be created upon success.
-
 ### Running a Backup
 
 To run a backup, first copy the key from the `apikey.lic` file and set it as the `API_KEY` environment variable. Then, run the executable without any flags:
@@ -57,6 +44,7 @@ To run a backup, first copy the key from the `apikey.lic` file and set it as the
 ```sh
 export API_KEY="your-generated-api-key"
 export API_BASE_URL="http://your-api-url"
+export LOCAL_FOLDER_PATH="your-local-folder-path"
 
 ./sh-backups
 ```
@@ -66,6 +54,7 @@ export API_BASE_URL="http://your-api-url"
 ```powershell
 $env:API_KEY="your-generated-api-key"
 $env:API_BASE_URL="http://your-api-url"
+$env:LOCAL_FOLDER_PATH="your-local-folder-path"
 
 ./sh-backups.exe
 ```
